@@ -19,5 +19,8 @@ class Git:
             opts += ["--branch", branch]
         return await self.run(["clone"] + opts + [url, dst_dir])
 
+    async def clean(self, repo_dir):
+        return await self.run(["clean", "--force", "-d", "-x"], cwd=repo_dir)
+
     async def checkout(self, repo_dir, revision):
-        return await self.run(["checkout", "--force", revision], cwd=repo_dir)
+        return await self.run(["checkout", "--force", "--recurse-submodules", revision], cwd=repo_dir)

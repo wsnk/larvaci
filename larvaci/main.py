@@ -11,6 +11,7 @@ __PID_FILE = os.path.join(os.getcwd(), "larvaci.pid")
 __LOG_DIR = os.path.join(os.getcwd(), "larvaci-logs")
 __WORK_DIR = os.path.join(os.getcwd(), "larvaci-workdir")
 __STOP_SIGNALS = ("SIGINT", "SIGTERM")  # this signals will stop service
+__GITHUB_TOKEN_VAR = "GITHUB_ACCESS_TOKEN"
 
 
 def register_flow(flow_cls):
@@ -18,7 +19,7 @@ def register_flow(flow_cls):
     return flow_cls
 
 
-async def main_loop(workdir_base):
+async def main_loop(workdir_base, github_token):
     import signal
 
     logging.info("Start main loop...")
@@ -33,7 +34,7 @@ async def main_loop(workdir_base):
         logger = init_logger(name=name, logdir=logdir, verbose=True)
 
         logging.info(f"Run flow {name} in {workdir}")
-        flow = flow_cls(workdir=workdir, logger=logger)
+        flow = flow_cls(workdir=workdir, logger=logger, github_token=github_token)
         tasks.append(asyncio.create_task(flow._run()))
         flows.append(flow)
 
@@ -60,6 +61,7 @@ def main():
     parser.add_argument("--pid-file",       help="File to write PID into", default=None, type=str)
     parser.add_argument("--log-dir",        help="Directory to write logs into", default=None, type=str)
     parser.add_argument("--work-dir",       help="Base working directory", default=__WORK_DIR, type=str)
+    parser.add_argument("--github-token",   help="GitHub acces token", type=str)
 
     args = parser.parse_args()
 
@@ -92,5 +94,11 @@ def main():
             f.write(str(os.getpid()))
 
     init_logger(verbose=args.verbose, logdir=log_dir)
-    asyncio.run(main_loop(workdir_base=args.work_dir))
+    if args.github_token is None:
+        args.github_token = os.environ[__GITHUB_TOKEN_VAR]
+
+    asyncio.run(main_loop(
+        workdir_base=args.work_dir,
+        github_token=args.github_token
+    ))
 

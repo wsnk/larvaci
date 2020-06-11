@@ -5,6 +5,8 @@ import time
 import asyncio
 from .command import Command
 from .git import Git
+from .github import GitHubClient
+
 
 _CONTEXT_FNAME = "context.json"
 
@@ -12,11 +14,12 @@ _CONTEXT_FNAME = "context.json"
 class FlowBase:
     delay = 60
 
-    def __init__(self, workdir, logger):
+    def __init__(self, workdir, logger, github_token):
         self.workdir = workdir
         self.logger = logger
         self.command = Command(logger=self.logger)
         self.git = Git(logger=self.logger)
+        self.github = GitHubClient(token=github_token, logger=self.logger)
         self.context = {}
 
         self._context_path = os.path.join(self.workdir, _CONTEXT_FNAME)
