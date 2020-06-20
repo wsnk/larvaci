@@ -10,7 +10,7 @@ __FLOWS = {}
 __PID_FILE = os.path.join(os.getcwd(), "larvaci.pid")
 __LOG_DIR = os.path.join(os.getcwd(), "larvaci-logs")
 __WORK_DIR = os.path.join(os.getcwd(), "larvaci-workdir")
-__STOP_SIGNALS = ("SIGINT", "SIGTERM")  # this signals will stop service
+__STOP_SIGNALS = ("SIGINT", "SIGTERM")  # these signals will stop service
 __GITHUB_TOKEN_VAR = "GITHUB_ACCESS_TOKEN"
 
 

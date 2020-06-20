@@ -23,16 +23,35 @@ class GitHubClient:
                 self.logger.debug(f"GitHub API response: {result}")
                 return result
 
+    async def add_comment(self, subject_id, content):
+        try:
+            resp = await self.request(add_comment(subject_id=subject_id, content=content))
+            return resp["data"]["addComment"]["commentEdge"]["node"]["id"]
+        except Exception:
+            self.logger.exception(f"Failed to add GitHub comment")
+            return None
+
+    async def update_comment(self, comment_id, content):
+        try:
+            await self.request(update_comment(comment_id=comment_id, content=content))
+        except Exception:
+            self.logger.exception(f"Failed to add GitHub comment")
+
 
 # -------------------------------------------------------------------------------------------------
 
+class PullRequestState:
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+    MERGED = "MERGED"
 
-def pull_requests(repo_owner, repo_name, states=None):
-    query = """query($repo_owner:String!, $repo_name:String!) {
+
+def pull_requests(repo_owner, repo_name, **kwargs):
+
+    query = """query($repo_owner:String!, $repo_name:String!, $states:[PullRequestState!], $after:String) {
         repository(owner: $repo_owner, name: $repo_name) {
-            id,
-            sshUrl,
-            pullRequests(last: 10) {
+            id, url, sshUrl,
+            pullRequests(last: 100, states: $states, after: $after) {
                 edges {
                     cursor,
                     node {
@@ -52,10 +71,10 @@ def pull_requests(repo_owner, repo_name, states=None):
         "query": query,
         "variables": {
             "repo_owner": repo_owner,
-            "repo_name": repo_name
+            "repo_name": repo_name,
+            **kwargs
         }
     }
-
 
 
 def add_comment(subject_id, content):
@@ -94,3 +113,25 @@ def update_comment(comment_id, content):
             "content": content
         }
     }
+
+
+# -------------------------------------------------------------------------------------------------
+if __name__ == "__main__":
+    import argparse
+    import asyncio
+    import logging
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--token", help="GitHub acces token", type=str)
+
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.DEBUG)
+    
+    client = GitHubClient(token=args.token)
+    # response = asyncio.run(client.request(pull_requests("hisicam-buildbot", "x")))
+
+    xid = "MDExOlB1bGxSZXF1ZXN0NDMxNTczOTQz"
+
+    response = asyncio.run(client.request(add_comment(subject_id=xid, content="a-a-a-a-a!")))
+    print(json.dumps(response, indent=2))

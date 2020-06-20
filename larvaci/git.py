@@ -8,10 +8,7 @@ class Git:
 
     async def run(self, args, cwd=None):
         args.insert(0, self.git_path)
-        await self.cmd.run(args, cwd=cwd)
-        retcode = await self.cmd.wait()
-        if retcode != 0:
-            raise RuntimeError(f"git command failed with code = {retcode}")
+        await self.cmd.exec(args, cwd=cwd)
 
     async def clone(self, url, dst_dir, branch=None):
         return await self.run(["clone", url, dst_dir])
