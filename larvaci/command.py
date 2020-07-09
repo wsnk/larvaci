@@ -5,8 +5,8 @@ import time
 
 
 # -------------------------------------------------------------------------------------------------
-def _with_timeout(coro, timeout=None):
-     if timeout is None:
+async def _with_timeout(coro, timeout=None):
+    if timeout is None:
         return await coro
     return await asyncio.wait_for(coro, timeout=timeout)
 
@@ -128,7 +128,7 @@ class Command:
         `timeout` - timeout for process completion (raise asyncio.TimeoutError)
         """
         async with self.run(args, cwd) as proc:
-            return await proc.wait(**kwargsg)
+            return await proc.wait(**kwargs)
 
     async def read_stdout(self, args, cwd=None, **kwargs):
         """
