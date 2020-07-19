@@ -80,22 +80,31 @@ class Process:
             return retcode
         raise RuntimeError(f"command failed with code = {retcode}")
 
-    async def read_stdout(self, raw=False, noexcept=False, nolog=False, timeout=None):
+    async def read_stdout(self, **kwargs):
+        async for line in self.read_stdout_until(separator=b"\n", **kwargs):
+            yield line
+    
+    async def read_stdout_until(self, separator=b"\n", raw=False, noexcept=False, nolog=False, timeout=None):
         if not nolog:
             self._log_output(self._proc.stderr, self.STDERR)
 
-        while True:
-            line = await _with_timeout(self._proc.stdout.readline(), timeout=timeout)
-            if not line:
+        eof = False
+        while not eof:
+            try:
+                chunk = await _with_timeout(self._proc.stdout.readuntil(separator), timeout=timeout)
+            except asyncio.IncompleteReadError as err:
+                chunk = err.partial
+                eof = True
+            if not chunk:
                 break  # no more output in STDOUT
             if not raw:
-                line = line.decode("utf-8", errors="ignore").strip()
-            self.logger.debug(f"[PID={self.pid}, {self.STDOUT}] {line}")
-            yield line
+                chunk = chunk[:-len(separator)].decode("utf-8", errors="ignore")
+            self.logger.debug(f"[PID={self.pid}, {self.STDOUT}] {chunk}")
+            yield chunk
 
         # STDOUT is closed, STDERR is being logged already
         await self.wait(noexcept=noexcept, nolog=True, timeout=timeout)
-    
+
     async def terminate(self, timeout=10):
         self._proc.terminate()
         try:
@@ -131,7 +140,8 @@ class Command:
             return await proc.wait(**kwargs)
 
     async def read_stdout(self, args, cwd=None, **kwargs):
-        """
+        """ Async generator of lines obtained from STDOUT
+
         Extra kwargs:
         `raw` - do not decode bytes read from STDOUT
         `noexcept` - do not raise exception if running process is failed
@@ -142,11 +152,16 @@ class Command:
             async for line in proc.read_stdout(**kwargs):
                 yield line
 
+    async def read_stdout_until(self, args, separator=b"\n", cwd=None, **kwargs):
+        async with self.run(args, cwd) as proc:
+            async for chunk in proc.read_stdout(separator=separator, **kwargs):
+                yield chunk
+
 
 # -------------------------------------------------------------------------------------------------
 async def run(args):
     cmd = Command()
-    async for l in cmd.read_stdout(args):
+    async for l in cmd.read_stdout_until(args, separator=b"\n"):
         print(l)
 
 
