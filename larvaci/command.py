@@ -154,7 +154,7 @@ class Command:
 
     async def read_stdout_until(self, args, separator=b"\n", cwd=None, **kwargs):
         async with self.run(args, cwd) as proc:
-            async for chunk in proc.read_stdout(separator=separator, **kwargs):
+            async for chunk in proc.read_stdout_until(separator=separator, **kwargs):
                 yield chunk
 
 
