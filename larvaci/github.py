@@ -20,16 +20,17 @@ class GitHubClient:
         self.logger.debug(f"Make GitHub API request: {data} ...")
         async with aiohttp.ClientSession(headers=self.headers) as session:
             while True:
-                async with session.post(GITHUB_API_URL, data=data) as response:
-                    result = await response.json()
-                    self.logger.debug(f"GitHub API response: {result}")
-                    return result
-            except:
-                if attempts == 0:
-                    raise
-                self.logger.exception(f"Request to GitHb API failed, retry...")
-                attempts -= 1
-                await asyncio.sleep(1)
+                try:
+                    async with session.post(GITHUB_API_URL, data=data) as response:
+                        result = await response.json()
+                        self.logger.debug(f"GitHub API response: {result}")
+                        return result
+                except:
+                    if attempts == 0:
+                        raise
+                    self.logger.exception(f"Request to GitHb API failed, retry...")
+                    attempts -= 1
+                    await asyncio.sleep(1)
 
     async def add_comment(self, subject_id, content):
         try:
