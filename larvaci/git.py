@@ -27,3 +27,6 @@ class Git:
 
     async def submodule_deinit(self, repo_dir):
         return await self.run(["submodule", "deinit", "--force", "--all"], cwd=repo_dir)
+
+    async def merge(self, repo_dir, revision)
+        return await self.run(["merge", "--squash", revision], cwd=repo_dir)

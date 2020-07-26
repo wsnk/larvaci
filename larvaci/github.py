@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import aiohttp
+import asyncio
 
 
 GITHUB_API_URL="https://api.github.com/graphql"
@@ -14,14 +15,21 @@ class GitHubClient:
             "Authorization": f"bearer {token}"
         }
 
-    async def request(self, query):
+    async def request(self, query, attempts=3):
         data = json.dumps(query).encode("utf-8")
         self.logger.debug(f"Make GitHub API request: {data} ...")
         async with aiohttp.ClientSession(headers=self.headers) as session:
-            async with session.post(GITHUB_API_URL, data=data) as response:
-                result = await response.json()
-                self.logger.debug(f"GitHub API response: {result}")
-                return result
+            while True:
+                async with session.post(GITHUB_API_URL, data=data) as response:
+                    result = await response.json()
+                    self.logger.debug(f"GitHub API response: {result}")
+                    return result
+            except:
+                if attempts == 0:
+                    raise
+                self.logger.exception(f"Request to GitHb API failed, retry...")
+                attempts -= 1
+                await asyncio.sleep(1)
 
     async def add_comment(self, subject_id, content):
         try:
