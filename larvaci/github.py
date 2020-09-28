@@ -45,6 +45,20 @@ class GitHubClient:
             await self.request(update_comment(comment_id=comment_id, content=content))
         except Exception:
             self.logger.exception(f"Failed to add GitHub comment")
+    
+    async def add_or_update_comment(self, subject_id, comment_id, content):
+        if comment_id is None:
+            return await self.add_comment(subject_id=subject_id, content=content)
+        else:
+            await self.update_comment(comment_id=comment_id, content=content)
+            return comment_id
+    
+    async def open_pull_requests(self, repo_owner, repo_name):
+        return await self.request(pull_requests(
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            states=[PullRequestState.OPEN]
+        ))
 
 
 # -------------------------------------------------------------------------------------------------

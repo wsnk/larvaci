@@ -1,6 +1,7 @@
 from . import github as gh
 from .flow import FlowBase
 import os
+import shutil
 
 
 def are_equal_by_subset(d1, d2, keys):
@@ -10,37 +11,58 @@ def are_equal_by_subset(d1, d2, keys):
     return True
 
 
+def make_rundir(basedir, pr):
+    date = time.strftime("%Y%m%dT%H%M%S", time.localtime())
+    base_ref = pr["baseRefOid"]
+    head_ref = pr["headRefOid"]
+
+    rundir = os.path.join(basedir, f"runs/{date}_{base_ref}_{head_ref}")
+    if os.path.exists(rundir):
+        shutil.rmtree(rundir)
+
+    os.makedirs(rundir)
+    return rundir
+
+
 class PullRequestProcessorFlowBase(FlowBase):
     REPO_OWNER = None
     REPO_NAME = None
+    MAX_ATTEMPTS = 3
 
-    async def process_pull_request(self, repodir, pr):
+    RES_SUCCESS = "success"
+    RES_FAILURE = "failure"
+    RES_CRASHED = "crashed"
+
+    async def process_pull_request(self, repodir, pr, rundir):
         raise NotImplementedError("process_pull_request() must be implemented in sublcasses")
 
-    def save_processed_pull_request(self, pr, success):
+    def save_processed_pull_request(self, pr, result, attempts):
         pr_context = self.context.setdefault("__pull_requests", [])
         pr_context.append({
             "id": pr["id"],
             "baseRefOid": pr["baseRefOid"],
             "headRefOid": pr["headRefOid"],
-            "success": success
+            "result": result,
+            "attempts": attempt
         })
-        del pr_context[:-100]
+        del pr_context[:-100]  # remeber 100 recent PRs
     
     def was_pull_request_processed(self, pr):
         for processed in self.context.get("__pull_requests", []):
             if are_equal_by_subset(processed, pr, ("id", "baseRefOid", "headRefOid")):
                 return True
         return False
+    
+    def get_pr_context(self, pr):
+        for ctx in self.context.get("__pull_requests", []):
+            if are_equal_by_subset(ctx, pr, ("id", "baseRefOid", "headRefOid")):
+                return ctx
+        return None
 
     async def run(self):
         repodir = os.path.join(self.workdir, self.REPO_NAME)
 
-        response = await self.github.request(
-            gh.pull_requests(
-                repo_owner=self.REPO_OWNER, repo_name=self.REPO_NAME, states=[gh.PullRequestState.OPEN]
-            )
-        )
+        response = await self.github.open_pull_requests(repo_owner=self.REPO_OWNER, repo_name=self.REPO_NAME)
 
         ssh_url = response["data"]["repository"]["sshUrl"]
         if os.path.isdir(repodir):
@@ -58,20 +80,28 @@ class PullRequestProcessorFlowBase(FlowBase):
         prs = [edge["node"] for edge in response["data"]["repository"]["pullRequests"]["edges"]]
         self.logger.debug(f"There are {len(prs)} open PRs")
         for pr in prs:
-            if self.was_pull_request_processed(pr):
-                self.logger.debug(f"PR {pr} has been processed")
+            ctx = self.get_pr_context(pr)
+            if ctx is not None:
+                if ctx["result"] == RES_SUCCESS:
+                    self.logger.debug(f"PR {pr} has been successfully processed")
+                    continue
+                attempt = ctx["attempts"] + 1
+            else:
+                attempt = 1
+
+            if attempt > self.MAX_ATTEMPTS:
+                self.logger.debug(f"PR {pr} has been tried to process {attempt} times")
                 continue
-            self.logger.debug(f"PR {pr} has not been processed")
+
             try:
-                self.logger.info(f"Start processing of PR {pr} ...")
-                success = await self.process_pull_request(repodir, pr)
-                self.logger.info(f"PR {pr} was processed, success={success}")
-                self.save_processed_pull_request(pr, success)
+                rundir = make_rundir(self.workdir, pr)
+                self.logger.info(f"Start processing of PR {pr} (rundir={rundir})")
+                success = await self.process_pull_request(repodir=repodir, pr=pr, rundir=rundir)
+                result = self.RES_SUCCESS if success else self.RES_FAILURE
+                self.logger.info(f"PR {pr} was processed, result={result}")
+                self.save_processed_pull_request(pr, result, attempt)
                 continue
             except Exception:
-                # exception here means internal flow error, PR will be reprocessed on the next iteration
                 self.logger.exception(f"Processing of PR failed with exception")
-            await self.github.request(gh.add_comment(
-                subject_id=pr["id"],
-                content="larvaci failed, see logs"
-            ))
+                await self.github.add_comment(subject_id=pr["id"], content=f"larvaci failed ({attempt} attempt), see logs")
+                self.save_processed_pull_request(pr, self.RES_CRASHED, attempt)
