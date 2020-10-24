@@ -2,6 +2,7 @@ from . import github as gh
 from .flow import FlowBase
 import os
 import shutil
+import time
 
 
 def are_equal_by_subset(d1, d2, keys):
@@ -36,14 +37,14 @@ class PullRequestProcessorFlowBase(FlowBase):
     async def process_pull_request(self, repodir, pr, rundir):
         raise NotImplementedError("process_pull_request() must be implemented in sublcasses")
 
-    def save_processed_pull_request(self, pr, result, attempts):
+    def save_processed_pull_request(self, pr, result, attempt):
         pr_context = self.context.setdefault("__pull_requests", [])
         pr_context.append({
             "id": pr["id"],
             "baseRefOid": pr["baseRefOid"],
             "headRefOid": pr["headRefOid"],
             "result": result,
-            "attempts": attempt
+            "attempt": attempt
         })
         del pr_context[:-100]  # remeber 100 recent PRs
     
@@ -82,10 +83,10 @@ class PullRequestProcessorFlowBase(FlowBase):
         for pr in prs:
             ctx = self.get_pr_context(pr)
             if ctx is not None:
-                if ctx["result"] == RES_SUCCESS:
+                if ctx["result"] == self.RES_SUCCESS:
                     self.logger.debug(f"PR {pr} has been successfully processed")
                     continue
-                attempt = ctx["attempts"] + 1
+                attempt = ctx["attempt"] + 1
             else:
                 attempt = 1
 
